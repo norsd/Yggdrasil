@@ -1,89 +1,87 @@
 __author__ = 'Administrator'
 # coding = utf-8
-import sys,socket,time,threading
+import copy
+import datetime
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import socket
+import sys
+import threading
+import time
+
 from ctypes import*
+from datetime import datetime
+from math import e
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from norlib_python.Thread import *
+from Api.DATASPAN import *
 
 class MdThread(threading.Thread):
     def __init__(self,ip,port):
         threading.Thread.__init__(self)
         self.__ip = ip
         self.__port = port
+        self.dtData = {}
+        self.__ontickcbs = []
     def run(self):
         sock = socket.socket(socket.AF_INET,
                              socket.SOCK_DGRAM)
         sock.bind((self.__ip,self.__port))
         print("Starting Receiving......")
-        print(type(ThostFtdcDepthMarketDataField))
         while True:
             try:
                 (data,addr) = sock.recvfrom(1024)
-                t = cast( data, POINTER(ThostFtdcDepthMarketDataField))
-                print(t.contents.InstrumentID)
-                #print(type(t))
-                #print(data[0])
-                #print(type(data))
+                t = copy.deepcopy( cast( data, POINTER(ThostFtdcDepthMarketDataField)).contents)
+                #self.dtData.__setitem__(t.InstrumentID, t)
+                for cb in self.__ontickcbs:
+                    try:cb(t)
+                    finally:None
             except Exception,ex:
                 print ex
                 break
+    def RegTick(self,callback):
+        self.__ontickcbs.append(callback)
+    def GetKLineDatas(self, id, dataspan, start, next):
+        pass
 
-class CThostFtdcDepthMarketDataField:
-    def __init__(self, HighestPrice=0, BidPrice5=0, BidPrice4=0, BidPrice1=0, BidPrice3=0, BidPrice2=0, LowerLimitPrice=0, OpenPrice=0, AskPrice5=0, AskPrice4=0, AskPrice3=0, PreClosePrice=0, AskPrice1=0, PreSettlementPrice=0, AskVolume1=0, UpdateTime="", UpdateMillisec=0, AveragePrice=0, BidVolume5=0, BidVolume4=0, BidVolume3=0, BidVolume2=0, PreOpenInterest=0, AskPrice2=0, Volume=0, AskVolume3=0, AskVolume2=0, AskVolume5=0, AskVolume4=0, UpperLimitPrice=0, BidVolume1=0, InstrumentID="", ClosePrice=0, ExchangeID="", TradingDay="", PreDelta=0, OpenInterest=0, CurrDelta=0, Turnover=0, LastPrice=0, SettlementPrice=0, ExchangeInstID="", LowestPrice=0):
-        self.HighestPrice=HighestPrice
-        self.BidPrice5=BidPrice5
-        self.BidPrice4=BidPrice4
-        self.BidPrice1=BidPrice1
-        self.BidPrice3=BidPrice3
-        self.BidPrice2=BidPrice2
-        self.LowerLimitPrice=LowerLimitPrice
-        self.OpenPrice=OpenPrice
-        self.AskPrice5=AskPrice5
-        self.AskPrice4=AskPrice4
-        self.AskPrice3=AskPrice3
-        self.PreClosePrice=PreClosePrice
-        self.AskPrice1=AskPrice1
-        self.PreSettlementPrice=PreSettlementPrice
-        self.AskVolume1=AskVolume1
-        self.UpdateTime=UpdateTime
-        self.UpdateMillisec=UpdateMillisec
-        self.AveragePrice=AveragePrice
-        self.BidVolume5=BidVolume5
-        self.BidVolume4=BidVolume4
-        self.BidVolume3=BidVolume3
-        self.BidVolume2=BidVolume2
-        self.PreOpenInterest=PreOpenInterest
-        self.AskPrice2=AskPrice2
-        self.Volume=Volume
-        self.AskVolume3=AskVolume3
-        self.AskVolume2=AskVolume2
-        self.AskVolume5=AskVolume5
-        self.AskVolume4=AskVolume4
-        self.UpperLimitPrice=UpperLimitPrice
-        self.BidVolume1=BidVolume1
-        self.InstrumentID=InstrumentID
-        self.ClosePrice=ClosePrice
-        self.ExchangeID=ExchangeID
-        self.TradingDay=TradingDay
-        self.PreDelta=PreDelta
-        self.OpenInterest=OpenInterest
-        self.CurrDelta=CurrDelta
-        self.Turnover=Turnover
-        self.LastPrice=LastPrice
-        self.SettlementPrice=SettlementPrice
-        self.ExchangeInstID=ExchangeInstID
-        self.LowestPrice=LowestPrice
-        self.vcmap={}
-    def __repr__(self): return "<%s>" % ",".join(["%s:%s" % (x, getattr(self, x)) for x in ['HighestPrice', 'BidPrice5', 'BidPrice4', 'BidPrice1', 'BidPrice3', 'BidPrice2', 'LowerLimitPrice', 'OpenPrice', 'AskPrice5', 'AskPrice4', 'AskPrice3', 'PreClosePrice', 'AskPrice1', 'PreSettlementPrice', 'AskVolume1', 'UpdateTime', 'UpdateMillisec', 'AveragePrice', 'BidVolume5', 'BidVolume4', 'BidVolume3', 'BidVolume2', 'PreOpenInterest', 'AskPrice2', 'Volume', 'AskVolume3', 'AskVolume2', 'AskVolume5', 'AskVolume4', 'UpperLimitPrice', 'BidVolume1', 'InstrumentID', 'ClosePrice', 'ExchangeID', 'TradingDay', 'PreDelta', 'OpenInterest', 'CurrDelta', 'Turnover', 'LastPrice', 'SettlementPrice', 'ExchangeInstID', 'LowestPrice']])
-    def __str__(self): return u"abcdefg"
-    def getval(self, n):
-        if n in []:
-            return self.vcmap[n]["'%s'" % getattr(self, n)].encode("utf-8")
-        else: return getattr(self, n)
+class View:
+    def __init__(self, md, id):
+        self.__md = md
+        self.__id = id
+        self.__datas = []
+        self.__times = []
+        self.__ShowData()
+    def Open(self):
+        self.__md.RegTick(self.__OnTick)
+    def __OnTick(self, tick):
+        if tick.InstrumentID == 'IF1403':
+            self.__datas.append(tick.LastPrice)
+            strDate = tick.TradingDay
+            strTime = tick.UpdateTime
+            ms = tick.UpdateMillisec
+            dtime = datetime.strptime(" ".join([strDate, strTime, str(ms)]), "%Y%m%d %H:%M:%S %f")
+            self.__times.append(dtime)
+            pass
+    @SetInterval(2)
+    def __ShowData(self):
+        if not self.__datas:
+            return
+        if len(self.__datas)>0:
+            try:
+                #p1 = plt.subplot(110)
+                plt.plot(self.__times, self.__datas)
+                plt.draw()
+                plt.show()
+            except a,b:
+                print(a)
+                print(b)
 
-class TestStruct(Structure):
-    _fields_=[
-                ("ValueA",c_int),
-                ("StringA",c_char*9)
-            ]
+
+        #print self.__datas[-1].LastPrice
+
+#CTP Depth Market Data
 class ThostFtdcDepthMarketDataField(Structure):
     _fields_ = [
                 ("TradingDay",c_char*9),
@@ -131,11 +129,17 @@ class ThostFtdcDepthMarketDataField(Structure):
                 ("AveragePrice",c_double),
                 ("ActionDay",c_char*9),
                 ]
+
+
 if __name__ == "__main__":
     md = MdThread("127.0.0.1",12345)
-    data = ThostFtdcDepthMarketDataField()
-    POINTER(ThostFtdcDepthMarketDataField)
-    print(sys.getsizeof(data))
-    print(data.ExchangeInstID)
     md.start()
+    #s = datetime.datetime.now()
+    #n = s.AddDays(1)
+    #md.GetKLineDatas("IF1403" ,DataSpan.min1, s , n)
+    view = View(md,"IF1403")
+    #time.sleep(3)
+    view.Open()
+    print("opened")
+    #plt.show()
 
